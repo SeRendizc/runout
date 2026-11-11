@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.env
+.env.*
+__pycache__/

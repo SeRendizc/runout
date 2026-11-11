@@ -1,0 +1,49 @@
+{
+  "sourceId": "zenodo-nepal-mseed",
+  "startAt": "2026-08-26T02:50:00.000000Z",
+  "observedAt": 153,
+  "evidenceEndAt": 155,
+  "availableAt": 163,
+  "replayIngestSeconds": 8,
+  "detector": {
+    "id": "two-station-difference-rms-v1",
+    "feature": "one-second RMS of first differences in uncalibrated counts",
+    "baselineSeconds": 90,
+    "relativeThreshold": 8.0,
+    "sustainSeconds": 2,
+    "processingLibrary": "ObsPy 1.5.1"
+  },
+  "picks": [
+    {
+      "channel": "NK.KKN..BHN",
+      "samplingHz": 50,
+      "availableSamples": 30052,
+      "baselineRmsCounts": 50.976,
+      "firstAboveSecond": 149,
+      "decisionAtSecond": 151,
+      "ratios": [
+        8.069,
+        8.695
+      ]
+    },
+    {
+      "channel": "NK.PKIN..SHZ",
+      "samplingHz": 50,
+      "availableSamples": 30052,
+      "baselineRmsCounts": 68.513,
+      "firstAboveSecond": 153,
+      "decisionAtSecond": 155,
+      "ratios": [
+        9.012,
+        14.892
+      ]
+    }
+  ],
+  "archive": {
+    "path": "raw/Nepal_event_2026-08-26T025216_all_stations.mseed",
+    "sha256": "924eb45ed2746882a56a1b2bdae8f09dd19fcf1c1545b898ca200567e10ea0da",
+    "license": "CC-BY-4.0",
+    "traceSegments": 334,
+    "distinctChannels": 29
+  }
+}

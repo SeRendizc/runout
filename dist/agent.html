@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#131411">
+  <meta name="description" content="RUNOUT 泥石流预警演练。从上游观测到下游手机通知。">
+  <title>RUNOUT · 泥石流预警演练</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="agent.css">
+  <script defer src="terrain-data.js"></script>
+  <script defer src="runout-terrain.js"></script>
+  <script defer src="renderer.js"></script>
+  <script defer src="atlas.js"></script>
+  <script defer src="agent-scene.js"></script>
+  <script defer src="agent-ui.js"></script>
+</head>
+<body>
+  <header class="mast live-mast">
+    <a class="identity" href="#live" aria-label="RUNOUT，返回演练">
+      <svg viewBox="0 0 36 32" aria-hidden="true"><path d="M2 24 12 6l7 13 5-8 10 13M6 24h23M15 24l4-5" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span><strong>RUNOUT</strong><small>DEBRIS FLOW EARLY WARNING</small></span>
+    </a>
+    <nav class="live-nav" aria-label="RUNOUT 页面">
+      <a id="live-link" href="#live" aria-current="page">预警演练</a>
+      <a id="method-link" href="#method">方法与证据</a>
+    </nav>
+    <span class="simulation-tag"><span></span> 演练模式</span>
+  </header>
+
+  <main class="layout live-layout">
+    <section id="live-view" aria-labelledby="live-title">
+      <header class="live-hero">
+        <div>
+          <h1 id="live-title">泥石流预警演练</h1>
+          <p class="live-deck">从上游发现异常，到下游收到手机预警。</p>
+        </div>
+        <div class="stream-indicator" id="stream-state" data-tone="muted" role="status">等待运行</div>
+      </header>
+
+      <div id="live-error" class="live-error" role="alert" hidden></div>
+
+      <section class="control-strip" aria-label="回放设置">
+        <div class="control-scenario">
+          <label for="scenario">选择场景</label>
+          <select id="scenario" disabled><option value="">读取场景…</option></select>
+        </div>
+        <div class="control-spacer" aria-hidden="true"></div>
+        <button id="toggle-run" type="button" class="live-primary" disabled>暂停</button>
+        <button id="new-run" type="button" class="live-control" disabled>从头播放</button>
+        <details id="advanced-options" class="source-options">
+          <summary>高级设置</summary>
+          <div class="source-popover">
+            <details id="source-options">
+              <summary>输入源 <span id="source-count" class="source-count" hidden></span></summary>
+              <p>设置在下一次演练生效。</p>
+              <div id="source-checks" class="source-checks"></div>
+            </details>
+            <label class="speed-control" for="agent-mode">文本判读 <select id="agent-mode"><option value="rules">规则</option><option value="text-model" selected>本地文本模型</option></select></label>
+            <label class="speed-control" for="speed">倍速 <select id="speed"><option value="1">1×</option><option value="5">5×</option><option value="10" selected>10×</option><option value="30">30×</option><option value="60">60×</option></select></label>
+            <button id="step-run" type="button" class="live-control" disabled>暂停并前进 1 分钟</button>
+          </div>
+        </details>
+      </section>
+
+      <section class="run-clock" aria-label="场景时钟">
+        <output id="run-time">T+00:00</output>
+        <progress id="run-progress" max="1" value="0" aria-label="回放进度"></progress>
+        <span id="run-duration">—</span>
+      </section>
+
+      <section id="run-review" class="run-review" aria-label="本次演练复盘" hidden></section>
+      <div class="live-workspace">
+        <section class="live-panel map-panel" aria-labelledby="map-title">
+          <header class="panel-head stage-head">
+            <div>
+              <h2 id="map-title">流域地图</h2>
+              <span id="forecast-version" class="panel-tag">等待预测</span>
+            </div>
+            <div class="scene-modes" role="group" aria-label="场景视角">
+              <button type="button" data-scene-mode="film">跟随演练</button>
+              <button type="button" data-scene-mode="explore" title="拖动旋转，滚动缩放，点击查风险">自由探索</button>
+              <button type="button" data-scene-mode="map" aria-pressed="true">平面地图</button>
+            </div>
+          </header>
+          <div class="live-map" id="live-map">
+            <canvas id="terrain-shade" aria-hidden="true"></canvas>
+            <svg id="map-geo" preserveAspectRatio="xMidYMid meet" aria-label="地形和预测点位，点击地形选取坐标">
+              <g id="map-geometry"></g><g id="map-markers"></g><g id="map-query-marker"></g>
+            </svg>
+            <div id="agent-scene" hidden></div>
+            <div id="scene-notification" class="scene-notification" hidden>
+              <svg aria-hidden="true"><path/><circle r="8"/><text></text></svg>
+              <aside role="status"><small></small><strong></strong><p></p><span></span></aside>
+            </div>
+            <div id="scene-position" class="scene-position" hidden></div>
+            <span class="north-mark" aria-hidden="true">N <span>↑</span></span>
+            <span class="map-credit">COPERNICUS DEM · WGS84</span>
+          </div>
+          <div class="map-foot">
+            <span><i class="map-key impact"></i>预计受影响</span>
+            <span><i class="map-key other"></i>其余预测点位</span>
+            <span><i class="map-key delivered"></i>已模拟送达</span>
+            <span id="map-model-key" hidden><i class="map-key modeled"></i>模型影响范围</span>
+            <span id="map-asof">等待观测</span>
+          </div>
+          <div class="stage-interaction">
+            <p><strong>查一个位置</strong> · 点击地图或选择下方点位</p>
+            <p id="explore-hint">拖动旋转 · 滚动缩放</p>
+          </div>
+          <div id="map-sites" class="map-sites" aria-label="预测点位列表"></div>
+          <div id="query-result" class="query-result" aria-live="polite">点选后，这里会显示该位置的影响判断、预计到达时间和候选撤离路线。</div>
+        </section>
+
+        <aside class="live-panel story-panel" aria-label="演练进展">
+          <header class="panel-head"><h2>演练进展</h2></header>
+          <div class="story-now" aria-live="polite">
+            <div class="story-meta"><span id="story-stage">监测中</span><time id="story-time">T+00:00</time></div>
+            <h3 id="story-title">等待上游观测</h3>
+            <p id="story-detail">观测进入后，这里会显示 Agent 的判断与下游预警变化。</p>
+            <button id="story-action" class="live-control" type="button" hidden>查看判断依据</button>
+          </div>
+          <div id="story-points" class="story-points"></div>
+          <ol id="story-history" class="story-history" aria-label="本次演练关键事件"></ol>
+        </aside>
+
+        <section class="live-panel delivery-panel" aria-labelledby="delivery-title">
+          <header class="panel-head">
+            <h2 id="delivery-title">手机通知记录</h2>
+            <span id="delivery-count" class="panel-tag">0 个终端</span>
+          </header>
+          <div id="deliveries" class="deliveries" aria-label="终端送达"></div>
+          <button id="delivery-overflow" class="quiet-button" type="button" hidden></button>
+          <details id="undelivered" class="undelivered" hidden>
+            <summary id="undelivered-count">未送达记录</summary>
+            <ul id="undelivered-list"></ul>
+          </details>
+        </section>
+
+        <details id="coordinate-entry" class="live-panel query-panel">
+          <summary class="disclosure-head"><span id="query-title">手动输入坐标</span><span class="panel-tag">经纬度</span></summary>
+          <form id="query-form" class="query-form">
+            <label>经度 <input id="lon" name="lon" type="number" inputmode="decimal" min="-180" max="180" step="any" placeholder="85.3745" required></label>
+            <label>纬度 <input id="lat" name="lat" type="number" inputmode="decimal" min="-90" max="90" step="any" placeholder="28.2785" required></label>
+            <label>精度（米） <input id="accuracy" name="accuracy" type="number" inputmode="decimal" min="0" max="10000" step="any" value="25" required></label>
+            <button id="query-button" type="submit" class="live-primary" disabled>查询此处</button>
+          </form>
+          <details class="inject-box">
+            <summary>添加一条演练观测</summary>
+            <form id="inject-form" class="inject-form">
+              <label>输入类别 <select id="inject-kind"><option value="gauge">水位站观测</option><option value="camera">现场相机</option><option value="post">居民贴文</option></select></label>
+              <label id="inject-text-label" hidden>演练文本 <textarea id="inject-text" rows="2" maxlength="600" placeholder="例如：Timure 桥附近河水突然变浑。"></textarea></label>
+              <p id="inject-position-note">水位站和相机沿用上方经纬度，并按当前回放时钟记录。</p>
+              <button id="inject-button" type="submit" class="live-control" disabled>注入演练输入</button>
+              <output id="inject-state" role="status"></output>
+            </form>
+          </details>
+        </details>
+        <details id="technical-trace" class="live-panel journal-panel">
+          <summary class="disclosure-head">
+            <span id="journal-title">查看 Agent 运行轨迹</span>
+            <span id="journal-count" class="panel-tag">0 条事件</span>
+          </summary>
+          <div class="journal-tabs" role="group" aria-label="日志视图">
+            <button id="rationale-tab" type="button" aria-pressed="false">决策依据</button>
+            <button id="trace-tab" type="button" aria-pressed="true">轨迹</button>
+          </div>
+          <div id="trace-workspace" class="trace-workspace">
+            <div id="trace-current" class="trace-current" aria-live="polite"></div>
+            <div id="trace-overview" class="trace-overview" aria-label="轨迹时间轴"></div>
+            <div class="trace-toolbar">
+              <input id="trace-search" type="search" placeholder="搜索调用、证据或点位" aria-label="搜索轨迹">
+              <button id="trace-latest" class="quiet-button" type="button">最新</button>
+            </div>
+          </div>
+          <div id="journal" class="journal" aria-label="运行事件"></div>
+          <button id="older-events" class="quiet-button" type="button" hidden>显示更早事件</button>
+        </details>
+
+      </div>
+      <p class="live-footnote">时间、到达窗口和送达记录均属本次演练。地形判读和路线用于模拟复核。</p>
+    </section>
+
+    <section id="method-view" aria-labelledby="method-title" hidden>
+      <header class="live-hero">
+        <div><p class="eyebrow">DOCUMENTATION / TRACEABILITY</p><h1 id="method-title">方法与证据</h1><p class="live-deck">沿运行日志追溯观测、计算和终端结果。</p></div>
+        <a href="#live" class="live-control method-return">返回运行台</a>
+      </header>
+      <div class="method-grid">
+        <section class="live-panel method-panel" aria-labelledby="method-chain">
+          <p class="eyebrow">01 / PIPELINE</p><h2 id="method-chain">一条事件链</h2>
+          <ol class="method-steps">
+            <li><strong>观测进入</strong><span>按回放时钟接收输入，保留来源与证据编号。</span></li>
+            <li><strong>工具执行</strong><span>运行轨迹记录调用、返回与失败。决策依据引用对应输入。</span></li>
+            <li><strong>预测发布</strong><span>地图读取已发布版本，窗口随新证据更新。</span></li>
+            <li><strong>终端送达</strong><span>接收点以日志中的模拟送达事件为准。</span></li>
+          </ol>
+        </section>
+        <section class="live-panel method-panel" aria-labelledby="method-metrics-title">
+          <p class="eyebrow">02 / RUN ACCOUNTING</p><h2 id="method-metrics-title">本次运行记录</h2>
+          <p id="method-run" class="method-copy">建立一场运行后查看统计。</p>
+          <dl id="method-metrics" class="method-metrics"></dl>
+          <p class="method-caption">仅统计当前运行已收到的事件。终端数按点位去重，预测按版本去重。</p>
+          <a class="method-action" href="#live">在运行台配置输入源并重放</a>
+        </section>
+        <section class="live-panel method-panel method-wide" aria-labelledby="method-source-title">
+          <p class="eyebrow">03 / PROVENANCE</p><h2 id="method-source-title">场景与来源</h2>
+          <div id="method-sources" class="method-sources"><p class="method-copy">正在读取可回放场景…</p></div>
+          <p class="method-caption">地形底图由本地裁切的 Copernicus DEM 生成。地图标记展示当前运行的预测点位与模拟送达。</p>
+        </section>
+        <section class="live-panel method-panel method-wide" aria-labelledby="method-filter-title">
+          <p class="eyebrow">04 / TEXT FILTER CHECK</p><h2 id="method-filter-title">贴文筛选离线评估</h2>
+          <p id="method-filter" class="method-copy">正在读取评估…</p><dl id="method-filter-metrics" class="method-metrics"></dl>
+        </section>
+        <section id="method-ablation" class="live-panel method-panel method-wide" aria-labelledby="method-ablation-title" hidden>
+          <p class="eyebrow">05 / REPLAY ABLATION</p><h2 id="method-ablation-title">输入源消融对照</h2>
+          <p id="ablation-scope" class="method-copy"></p>
+          <table class="ablation-table"><thead><tr><th scope="col">回放指标</th><th scope="col">全部输入</th><th scope="col">关闭该来源</th></tr></thead><tbody id="ablation-rows"></tbody></table>
+        </section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
